@@ -449,7 +449,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   two instance instances on GPUs [0, 1] will share the same weights
   */
   std::vector<std::thread> threads;
-  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("[Model Init]Before Loading Weights:")).c_str());
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("[Model Init] Before Loading Weights:")).c_str());
   ft::print_mem_usage();
   for (int gid = 0; gid < total_weight_gpu_size; gid++) {
     int rank = node_id * gpu_size + gid % tp_pp_size;
@@ -459,7 +459,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   for (auto& t : threads) {
     t.join();
   }
-  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("[Model Init]After Loading Weights:")).c_str());
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("[Model Init] After Loading Weights:")).c_str());
   ft::print_mem_usage();
 }
 
@@ -484,7 +484,7 @@ ModelState::LoadModel(
 
   if (!node_id && !device_id) {
     LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO, (std::string("[Model Instance Init]Before Loading Model:")).c_str());
+        TRITONSERVER_LOG_INFO, (std::string("[Model Instance Init] Before Loading Model:")).c_str());
   }
   ft::print_mem_usage();
 
@@ -501,7 +501,7 @@ ModelState::LoadModel(
 
   if (!node_id && !device_id) {
     LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO, (std::string("[Model Instance Init]After Loading Model:")).c_str());
+        TRITONSERVER_LOG_INFO, (std::string("[Model Instance Init] After Loading Model:")).c_str());
   }
   ft::print_mem_usage();
 
