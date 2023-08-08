@@ -59,6 +59,8 @@
 #include "src/fastertransformer/triton_backend/t5/T5TritonModelInstance.h"
 #include "src/fastertransformer/triton_backend/t5-encoder/T5EncoderTritonModel.h"
 #include "src/fastertransformer/triton_backend/t5-encoder/T5EncoderTritonModelInstance.h"
+#include "src/fastertransformer/triton_backend/llama/LlamaTritonModel.h"
+#include "src/fastertransformer/triton_backend/llama/LlamaTritonModelInstance.h"
 #include "src/fastertransformer/triton_backend/transformer_triton_backend.hpp"
 #include "src/fastertransformer/utils/Tensor.h"
 #include "src/fastertransformer/utils/cuda_bf16_wrapper.h"
@@ -329,6 +331,18 @@ std::shared_ptr<AbstractTransformerModel> ModelState::ModelFactory(
             tp, pp, custom_ar, model_dir, int8_mode, is_sparse, remove_padding);
 #endif
     }
+  } else if (model_type == "Llama") {
+    if (data_type == "fp16") {
+      ft_model = std::make_shared<LlamaTritonModel<half>>(tp, pp, custom_ar, model_dir);
+#ifdef ENABLE_BF16
+    } else if (data_type == "bf16") {
+      ft_model = std::make_shared<LlamaTritonModel<__nv_bfloat16>>(tp, pp, custom_ar, model_dir);
+#endif
+    } else if (data_type == "fp32") {
+      ft_model = std::make_shared<LlamaTritonModel<float>>(tp, pp, custom_ar, model_dir);
+    } else {
+      LOG_MESSAGE(TRITONSERVER_LOG_ERROR, dt_message.c_str());
+    }
   } else {
     THROW_IF_BACKEND_MODEL_ERROR(TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_UNSUPPORTED,
           ("Unknown model \"" + model_type + "\"").c_str()));
@@ -435,7 +449,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   two instance instances on GPUs [0, 1] will share the same weights
   */
   std::vector<std::thread> threads;
-  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("Before Loading Weights:")).c_str());
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("[Model Init]Before Loading Weights:")).c_str());
   ft::print_mem_usage();
   for (int gid = 0; gid < total_weight_gpu_size; gid++) {
     int rank = node_id * gpu_size + gid % tp_pp_size;
@@ -445,7 +459,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   for (auto& t : threads) {
     t.join();
   }
-  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("After Loading Weights:")).c_str());
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("[Model Init]After Loading Weights:")).c_str());
   ft::print_mem_usage();
 }
 
@@ -470,7 +484,7 @@ ModelState::LoadModel(
 
   if (!node_id && !device_id) {
     LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO, (std::string("Before Loading Model:")).c_str());
+        TRITONSERVER_LOG_INFO, (std::string("[Model Instance Init]Before Loading Model:")).c_str());
   }
   ft::print_mem_usage();
 
@@ -487,7 +501,7 @@ ModelState::LoadModel(
 
   if (!node_id && !device_id) {
     LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO, (std::string("After Loading Model:")).c_str());
+        TRITONSERVER_LOG_INFO, (std::string("[Model Instance Init]After Loading Model:")).c_str());
   }
   ft::print_mem_usage();
 
