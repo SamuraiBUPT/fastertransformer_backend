@@ -133,7 +133,7 @@ if __name__ == '__main__':
             pushed_request = 0
             req_sequence_idx = 0
             incident = 5
-            req_delay_pull_time = 5.5 * 4.1 * 2/3
+            req_delay_pull_time = 1.846334 * 5 * 1/3
             print("=================================================")
             print(f"[INFO] max_request of this epoch: {max_request}")
             print("=================================================")
@@ -170,12 +170,9 @@ if __name__ == '__main__':
                 period_time_pull_request = time.time() - start_time_pull_request
                 print(f"[TIME] request pull time: {period_time_pull_request} s")
                 
-                if req_sequence_idx % incident != 0:
-                    # [[4], gap_time_here[9], ...]
-                    time.sleep(req_delay_pull_time)    # gap 0.01 s to pull next requests
-                else:
-                    # [[4, 9, 8, 3, 5], gap_time_here[]]
-                    time.sleep(req_delay_pull_time)     # gap 0.1 s to pull next requests
+                # gap seconds
+                time.sleep(req_delay_pull_time)     # gap seconds to pull next requests
+                
             period_time_waiting_on = 0
             while True:
                 if len(user_data)!=pushed_request:
@@ -187,6 +184,8 @@ if __name__ == '__main__':
             
             period_time_waiting_off = period_time_waiting_on - req_delay_pull_time*req_sequence_idx
             print(f"[TIME] inference latency with waiting off: {period_time_waiting_off} s")
+            
+            print(f"[INFO] pushed_request: {pushed_request}, waiting_on_average: {period_time_waiting_on/pushed_request}")
             return period_time_waiting_on, period_time_waiting_off
 
         try:
@@ -215,7 +214,8 @@ if __name__ == '__main__':
             # WARN: max_batch_size = 1024, each request is 8, the max request_parallelism is 128
             
             # request_sequence = trace.request_time_stamp # [4, 9, 8, 1, 2, ...]
-            max_request = [100, 150, 200, 250, 300, 350]
+            # max_request = [100, 150, 200, 250, 300, 350]
+            max_request = [100]
             
             waiting_on_collection = []
             waiting_off_collection = []

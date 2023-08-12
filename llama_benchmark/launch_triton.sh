@@ -56,7 +56,7 @@ if [ "$ENABLE_DYNAMIC_BATCH" = "true" ] || [ "$ENABLE_DYNAMIC_BATCH" = "1" ]; th
     echo '
 dynamic_batching {
     preferred_batch_size: [ '"${PREFER_BATCH_SIZE}"' ]
-    max_queue_delay_microseconds: 136666666
+    max_queue_delay_microseconds: 110400000
 }
     ' >> ./triton-model-store/${MODEL_NAME}/fastertransformer/config.pbtxt
 else
@@ -68,11 +68,21 @@ model_transaction_policy {
   decoupled: False
 }
 
+batch_input [
+  {
+    kind: BATCH_ITEM_SHAPE
+    target_name: "input_ids_item_shape"
+    data_type: TYPE_INT32
+    source_input: "input_ids"
+  }
+]
+
 input [
   {
     name: "input_ids"
     data_type: TYPE_UINT32
     dims: [ -1 ]
+    allow_ragged_batch: true
   },
   {
     name: "start_id"
@@ -258,7 +268,7 @@ parameters {
 parameters {
   key: "model_checkpoint_path"
   value: {
-    string_value: "./FasterTransformer/models/'"${MODEL_NAME}"'/2-gpu"
+    string_value: "./models/'"${MODEL_NAME}"'/2-gpu"
   }
 }
 parameters {

@@ -9,8 +9,8 @@ end_id = 1
 def prepare_tensor(name, input, protocol):
     client_util = httpclient if protocol == "http" else grpcclient
     t = client_util.InferInput(
-        name, input.shape, np_to_triton_dtype(input.dtype))
-    t.set_data_from_numpy(input)    # return ids
+        name, input.shape, np_to_triton_dtype(input.dtype)) # set the input attributes
+    t.set_data_from_numpy(input)    # return input data
     return t
 
 class TensorGenerator:

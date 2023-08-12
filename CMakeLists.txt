@@ -39,9 +39,9 @@ option(ENABLE_FP8 "Enable FP8" OFF)
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
 set(TRITON_PYTORCH_LIB_PATHS "" CACHE PATH "Paths to Torch libraries")
 
-set(TRITON_BACKEND_REPO_TAG "r22.12" CACHE STRING "Tag for triton-inference-server/backend repo")
-set(TRITON_CORE_REPO_TAG "r22.12" CACHE STRING "Tag for triton-inference-server/core repo")
-set(TRITON_COMMON_REPO_TAG "r22.12" CACHE STRING "Tag for triton-inference-server/common repo")
+set(TRITON_BACKEND_REPO_TAG "r23.04" CACHE STRING "Tag for triton-inference-server/backend repo")
+set(TRITON_CORE_REPO_TAG "r23.04" CACHE STRING "Tag for triton-inference-server/core repo")
+set(TRITON_COMMON_REPO_TAG "r23.04" CACHE STRING "Tag for triton-inference-server/common repo")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -113,7 +113,7 @@ if (EXISTS ${FT_DIR})
 else()
   FetchContent_Declare(
     repo-ft
-    GIT_REPOSITORY https://github.com/SamuraiBUPT/FasterTransformer.git 
+    GIT_REPOSITORY https://github.com/SamuraiBUPT/FasterTransformer.git  
     GIT_TAG main
     GIT_SHALLOW ON
   )
@@ -134,7 +134,8 @@ configure_file(src/libtriton_fastertransformer.ldscript libtriton_fastertransfor
 
 add_library(
   triton-fastertransformer-backend SHARED
-  src/libfastertransformer.cc
+  # src/libfastertransformer.cc # origin
+  src/libfastertransformer_modify.cc
 )
 
 add_library(
