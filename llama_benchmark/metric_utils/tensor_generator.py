@@ -42,6 +42,10 @@ class TensorGenerator:
         beam_width = (self.args.beam_width * np.ones([input0_data.shape[0], 1])).astype(np.uint32)
         start_ids = start_id * np.ones([input0_data.shape[0], 1]).astype(np.uint32)
         end_ids = end_id * np.ones([input0_data.shape[0], 1]).astype(np.uint32)
+        
+        # prepare lora input type
+        lora_bypass = 1
+        lora_type = lora_bypass * np.ones([input0_data.shape[0], 1]).astype(np.uint32)
 
         inputs = [
             prepare_tensor("INPUT_0", input0_data, self.args.protocol),
@@ -59,6 +63,7 @@ class TensorGenerator:
             prepare_tensor("beam_width", beam_width, self.args.protocol),
             prepare_tensor("start_id", start_ids, self.args.protocol),
             prepare_tensor("end_id", end_ids, self.args.protocol),
+            prepare_tensor("lora_type", lora_type, self.args.protocol),
         ]
 
         if print_input:

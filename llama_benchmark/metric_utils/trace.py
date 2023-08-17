@@ -16,7 +16,7 @@ class Trace:
     def prepare_period_request(self):
         length = 200
         random.seed(self.rand_seed)
-        request_time_stamp = [random.randint(1, 9) for _ in range(length)]    # 495 request in total
+        request_time_stamp = [random.randint(25, 25) for _ in range(length)]    # 495 request in total
         return request_time_stamp
     
     def get_single_request_input(self, text:list):

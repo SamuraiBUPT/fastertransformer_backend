@@ -436,7 +436,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     model_filename = std::to_string(param_get_int(param, "tensor_para_size")) + "-gpu";
   }
 
-  ft_model = ModelFactory(param, model_filename);
+  ft_model = ModelFactory(param, model_filename); // initialize
 
   int total_weight_gpu_size = (instance_group_count * model_instance_size) >= gpu_size ?
     gpu_size : (instance_group_count * model_instance_size);
@@ -481,6 +481,9 @@ ModelState::LoadModel(
   if (cc_model_filename.empty()) {
     cc_model_filename = "gpt3-model";
   }
+  else{
+    LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("[Model Name] ") + cc_model_filename).c_str());
+  }
 
   if (!node_id && !device_id) {
     LOG_MESSAGE(
@@ -494,6 +497,7 @@ ModelState::LoadModel(
 
   const int rank = node_id * GetGpuSize() + device_id - device_id_start;
 
+  // ft_model is a variable of ModelState
   auto model_instance = ft_model->createModelInstance(
       device_id, rank, streams_[stream_id], nccl_params_instance,
       custom_all_reduce_comms);
@@ -817,6 +821,8 @@ ModelInstanceState::ModelInstanceState(
   nccl_params_ = shared_ft_model->createNcclParams(node_id, model_instance_device_id_start_, num_nodes > 1);
 
   shared_ft_model->createCustomComms(&custom_all_reduce_comms_, world_size_);
+
+  // load models
   std::string model_instance_gpu_ids = "[ ";
   for (int gid = model_instance_device_id_start_;
     gid < model_instance_device_id_start_ + model_instance_gpu_size_; gid++)
@@ -1137,13 +1143,25 @@ ModelInstanceState::ProcessRequests(
   if (is_decoupled_) {
     generate_response_placeholders(&responses, &factories);
   }
+
+  // the collector will transfer the input tensor to a contiguous memory
   BackendInputCollector collector(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream());
+
+  // preprocess the input tensors
   SetInputTensors(
       total_batch_size, requests, request_count, &responses, &collector,
       &input_names, &input_tensors, &input_memories, &cuda_copy);
 
+  //// test
+  // for(auto &ipair: *input_tensors){
+  //   LOG_MESSAGE(
+  //     TRITONSERVER_LOG_INFO,
+  //     std::string(ipair.first).c_str()
+  //   );
+  // }
+  
   // Wait for any in-flight input tensor copies to complete.
 #ifdef TRITON_ENABLE_GPU
   if (cuda_copy) {
@@ -1273,7 +1291,10 @@ ThreadForward(
   if (use_stream_cb) {
     (*ft_model_instance)->registerCallback(streaming_callback, (void*)context);
   }
+
+  // forward
   *output_tensors = (*ft_model_instance)->forward(*input_tensors);
+
   if (use_stream_cb) {
     (*ft_model_instance)->unRegisterCallback();
   }
@@ -1465,15 +1486,32 @@ ModelInstanceState::Execute(
   return output_tensors;
 }
 
+/// The requests contain information to be processed, this function convert them to
+/// an unordered_map as Tensor, and transfer them to a contiguous memory space for
+/// Forward()
+/// \param total_batch_size Input: the batch size
+/// \param requests Input: the requests to be processed
+/// \param request_count  Input: the count
+/// \param responses  Output: store the response
+/// \param collector  Input: the collector
+/// \param input_names  Output: store the input names
+/// \param input_tensors  Output: store the converted tensor
+/// \param input_memories Output: input memories
+/// \param cuda_copy  cuda utils
+/// \return void
 void
 ModelInstanceState::SetInputTensors(
-    size_t total_batch_size, TRITONBACKEND_Request** requests,
-    const uint32_t request_count,
-    std::vector<TRITONBACKEND_Response*>* responses,
-    BackendInputCollector* collector, std::vector<const char*>* input_names,
+    size_t total_batch_size,                                                    // __In__
+    TRITONBACKEND_Request** requests,                                           // __In__
+    const uint32_t request_count,                                               // __In__
+    std::vector<TRITONBACKEND_Response*>* responses,                            // __Out__
+    BackendInputCollector* collector,                                           // __In__
+    std::vector<const char*>* input_names,                                      // __Out__
     std::shared_ptr<std::unordered_map<std::string, triton::Tensor>>*
-        input_tensors,
-    std::vector<BackendMemory*>* input_memories, bool* cuda_copy)
+        input_tensors,                                                          // __Out__
+    std::vector<BackendMemory*>* input_memories,                                // __Out__
+    bool* cuda_copy
+    )
 {
   const int max_batch_size = model_state_->MaxBatchSize();
   bool sequence_batching_enabled = model_state_->SequenceBatchingEnabled();
@@ -1615,6 +1653,7 @@ ModelInstanceState::SetInputTensors(
     std::string input_name_str = std::string(input_name);
 
     // Pad input ids from different requests
+    // if successful, another loop will be executed and ignore the latter code
     RaggedBatchingParams param = batch_input_param_map[input_name_str + "_item_shape"];
     if (batch_input_param_map.find(input_name_str + "_item_shape") != batch_input_param_map.end()
         && batch_input_param_map[input_name_str + "_item_shape"].is_input_ragged) {
@@ -1683,7 +1722,13 @@ ModelInstanceState::SetInputTensors(
         ->insert({std::string(input_name),
                   triton::Tensor{TRITONSERVER_MEMORY_CPU, input_datatype,
                                  batchn_shape, padded_input_ids_ptr}});
-
+      // if (strcmp(input_name, "lora_type") == 0) {
+      //   std::string temp = padded_input_ids_ptr;
+      //   LOG_MESSAGE(
+      //     TRITONSERVER_LOG_INFO,
+      //     temp.c_str()
+      //   );
+      // }
       continue;
     }
 
@@ -1734,6 +1779,14 @@ ModelInstanceState::SetInputTensors(
         ->insert({std::string(input_name),
                   triton::Tensor{TRITONSERVER_MEMORY_CPU, input_datatype,
                                  batchn_shape_2, input_buffer}});
+
+    // if (strcmp(input_name, "lora_type") == 0 || strcmp(input_name, "input_ids") == 0) {
+    //     std::string temp_content = input_buffer;
+    //     LOG_MESSAGE(
+    //       TRITONSERVER_LOG_INFO,
+    //       (std::string(input_name) + temp_content).c_str()
+    //     );
+    //   }
   }
 
   LOG_MESSAGE(
