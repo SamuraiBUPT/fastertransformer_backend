@@ -13,3 +13,4 @@ __pycache__
 /.idea
 /examples/
 /llama_benchmark/dataset/
+**/build
