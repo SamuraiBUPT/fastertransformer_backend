@@ -30,33 +30,33 @@ namespace triton { namespace core { namespace lora_batching {
 
 extern "C" {
 
-/// The custom batching strategy cannot specify which request can be merged 
-/// to the specific batch, if one request cannot be batched to current batch,
-/// it will surely be batched to the next batch. Based on this implementing rule,
-/// we don't need any STL container at all because there is no need to enque and 
-/// deque the request. For counting and scheduling here, simple array also works fine.
+/// Every in-coming lora request with an identifier could be recognized,
+/// all we need to do is to make requests with the same identifier batched
+/// as more as possible. If the request's lora type is a rare one, then we 
+/// will delay it to next batch.
 ///
-/// `lora_request_manager`: record the number of different lora request. Its index
-/// stands for `lora type`
-/// `lora_request_manager_idx`: the array of `lora_request_manager` index which is not
-/// 0, we just need to iterate this array to get info about manager, avoiding
-/// meaningless iteration.
-/// `cur idx`: the idx of lora_request_manager_idx, default 1, like `.end()` method 
-/// in vector
+/// We use `map` to store the queue of different lora type. The type of deque
+/// is bool, to symbolize whether a request should be batched in current
+/// batch or not. We don't use TRITONBACKEND_Request* because it's meaningless
+/// for the scheduling algorithm here. Using bool type directly can reduce code
+/// operation and process more logically.
 ///
-// declare
-uint32_t* lora_request_manager;
-uint32_t* lora_request_manager_idx;
-const uint32_t array_size = 1001;
-uint32_t cur_idx;
-uint32_t* lora_request_cleaner;
+/// When a request comes, it will be judged to be into the current batch. If 
+/// the total number of all queues is smaller than the required amount, then 
+/// true, otherwise false.
+///
+/// In batch_finalize API function, all the `true` elements will pop from the
+/// queue, and all the `false` elements will be converted to true, because they 
+/// are delayed to the next batch and must be true.
+///
 
-/// @brief check if the request pool has this lora type
-/// @param lora_type 
-/// @return 
+std::map<int, std::deque<bool>> *request_pool;
+
+/// \brief check if the request pool has this lora type
+/// \param lora_type integer
+/// \return 
 bool query_lora_queue(int lora_type){
-  if(lora_request_manager[lora_type]){
-    // if exist, not zero
+  if(request_pool->count(lora_type)){
     return true;
   }else{
     return false;
@@ -66,8 +66,6 @@ bool query_lora_queue(int lora_type){
 uint64_t lora_request_batchsize;
 std::string lora_request_batchsize_str;
 
-std::deque<std::pair<int, TRITONBACKEND_Request*>>* delayed_requests;
-
 /// \brief The `BatcherInitialize` will be called during model loading.
 /// \param batcher point to a user-defined data structure for custom batching 
 /// strategy, however this is a double pointer.
@@ -75,13 +73,8 @@ std::deque<std::pair<int, TRITONBACKEND_Request*>>* delayed_requests;
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error*
 TRITONBACKEND_ModelBatcherInitialize(TRITONBACKEND_Batcher** batcher, TRITONBACKEND_Model* model){
-  // initialize the manager
-  lora_request_manager = new uint32_t[array_size]();      // 4KB
-  lora_request_manager_idx = new uint32_t[array_size]();  // 4KB
-  cur_idx = 1;
-  delayed_requests = new std::deque<std::pair<int, TRITONBACKEND_Request*>>();
-
-  lora_request_cleaner = new uint32_t[array_size]();      // 4KB
+  // initialize the request pool
+  request_pool = new std::map<int, std::deque<bool>>();
 
   // extract the parameters
   TRITONSERVER_Message* config_message;
@@ -147,60 +140,58 @@ TRITONBACKEND_ModelBatchInitialize(
 {
   // Userp will first point to the batcher indicating the maximum of the lora request
   // and will sub according to the delayed_queue requests number.
-  *userp = new uint32_t(*reinterpret_cast<const uint32_t*>(batcher));
-  uint32_t maximum_lora_requests = (*reinterpret_cast<uint32_t*>(*userp));   // the remained requests maximum
-  uint32_t available_space = maximum_lora_requests;
+  uint32_t* maximum_lora_requests = new uint32_t(*reinterpret_cast<const uint32_t*>(batcher));  // the remained requests maximum
+  uint32_t available_space = *maximum_lora_requests;
 
-  // push all delayed requests into the batch queue pool
-  for(uint32_t i = 0; i < delayed_requests->size() && i <= maximum_lora_requests; i++){
-    auto irequest_pair = delayed_requests->front();
-    uint32_t ilora_type = irequest_pair.first;
-    // TRITONBACKEND_Request *irequest = irequest_pair.second;
-
-    // move this request from the delayed queue to an array queue
-    delayed_requests->pop_front();
-    lora_request_manager[ilora_type] += 1;
-    available_space -= 1;
+  for(auto ite = request_pool->begin(); ite != request_pool->end(); ite++){
+    auto& _queue = ite->second;
+    if(!_queue.empty()){
+      for(int i = 0; i<_queue.size(); i++){
+        bool& boolean = _queue.at(i);
+        if(!boolean){
+          boolean = true;
+        }
+        if(available_space > 0)
+          available_space--;
+      }
+    }
   }
 
-  delete reinterpret_cast<uint32_t*>(*userp);
   
   *userp = new uint32_t(available_space);
   return nullptr;  // success
 }
 
-bool cmp(int a, int b){
-  return a > b;
-}
-
 bool judge_include(int lora_type, uint32_t available_space){
-  const int N = cur_idx;
-  int sorted_slots[N] = {0};
-  int label = -1;
-
-  for(uint32_t i = 0; i < cur_idx; i++){
-    int type_ = lora_request_manager_idx[i];
-    sorted_slots[i] = lora_request_manager[type_];
-    if(type_ == lora_type){
-      label = sorted_slots[i];
-    }
+  // judge if this queue doesn't exist
+  if(!query_lora_queue(lora_type)){
+    // plugin a new slot
+    std::deque<bool> new_queue;
+    new_queue.push_back(false);
+    std::pair<int, std::deque<bool>> new_slot(lora_type, new_queue);
+    request_pool->insert(new_slot);
+    return false;
   }
 
-  std::sort(sorted_slots, sorted_slots + N, cmp);
-
-  for(int i = 0; available_space > 0; i++){
-    if(available_space - sorted_slots[i] > 0){
-      if(sorted_slots[i] == label){
-        return true;
-      }else{
-        available_space -= sorted_slots[i];
-      }
-    }else{
-      break;
+  /// now the slot already exist.
+  auto _pair = request_pool->find(lora_type);
+  auto& _queue = _pair->second;
+  if(available_space > lora_request_batchsize/2){
+    _queue.push_back(true);
+    return true;
+  }
+  else{
+    // follow the last element, if null then false.
+    if(_queue.empty()){
+      _queue.push_back(false);
+      return false;
+    }
+    else{
+      bool follower = _queue.back();
+      _queue.push_back(follower);
+      return follower;
     }
   }
-  // 1. no available space
-  // 2. not enough amount
   return false;
 }
 
@@ -219,7 +210,7 @@ TRITONBACKEND_ModelBatchIncludeRequest(
 {
   // Default should_include to false in case function returns error.
   *should_include = false;
-  uint32_t available_space = (*reinterpret_cast<uint32_t*>(userp));
+  uint32_t *available_space = static_cast<uint32_t*>(userp);
   // uint32_t preferred_pipeline = 4;
 
   uint32_t input_count;
@@ -267,31 +258,11 @@ TRITONBACKEND_ModelBatchIncludeRequest(
       continue;
   }
   // process logic:
-
-  // judge if this queue doesn't exist
-  if(!query_lora_queue(lora_type_int)){
-    // plugin a new slot
-    lora_request_manager_idx[cur_idx] = lora_type_int;
-    cur_idx++;
+  
+  *should_include = judge_include(lora_type_int, *available_space) && *available_space;
+  if(*should_include){
+    *available_space -= 1;
   }
-
-  // push the request to the slot
-  lora_request_manager[lora_type_int] += 1;
-
-  // judge if this request should be included to the batch
-  // if the queue size < 5, included, or will be assigned to next batch
-  if(judge_include(lora_type_int, available_space)){
-    *should_include = true;
-    available_space -= 1;
-    lora_request_cleaner[lora_type_int] = 1;
-  }
-  else{
-    auto delayed_pair = std::make_pair(lora_type_int, request);
-    delayed_requests->push_back(delayed_pair);
-    *should_include = false;
-
-  }
-
 
   return nullptr;  // success
 }
@@ -304,13 +275,14 @@ TRITONBACKEND_ModelBatchIncludeRequest(
 TRITONSERVER_Error*
 TRITONBACKEND_ModelBatchFinalize(void* userp)
 {
-  delete static_cast<unsigned int*>(userp);
-  for(uint32_t i = 0; i < cur_idx; i++){
-    int lora_type_ = lora_request_manager_idx[i];
-    if(lora_request_cleaner[lora_type_]){
-      lora_request_manager[lora_type_] = 0;
+  for(auto ite = request_pool->begin(); ite != request_pool->end(); ite++){
+    // pull all `true` out of the queue
+    auto& _queue = ite->second;
+    while(_queue.front()){
+      _queue.pop_front();
     }
   }
+  delete static_cast<unsigned int*>(userp);
   return nullptr;  // success
 }
 
@@ -319,10 +291,8 @@ TRITONBACKEND_ModelBatchFinalize(void* userp)
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error*
 TRITONBACKEND_ModelBatcherFinalize(TRITONBACKEND_Batcher* batcher){
-  delete[] lora_request_manager;
-  delete[] lora_request_manager_idx;
-  cur_idx = 0;
-  delete delayed_requests;
+  delete request_pool;
+
   return nullptr;
 }
 
