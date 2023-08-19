@@ -19,8 +19,15 @@ while getopts ":pb:d:" opt; do
   esac
 done
 
+# compile triton backend
 cd /be_workspace/dongyazhu/fastertransformer_backend/build
 make -j12
 cd /be_workspace
 cp dongyazhu/fastertransformer_backend/build/libtriton_fastertransformer.so /opt/tritonserver/backends/fastertransformer
-bash ./dongyazhu/fastertransformer_backend/llama_benchmark/launch_triton.sh -d $DYNAMIC_ENABLED -pb $PREFER_BATCH_SIZE
+
+# compile custom batching strategy
+cd dongyazhu/fastertransformer_backend/src/batching_strategies/build
+make install
+
+cd /be_workspace
+bash ./dongyazhu/fastertransformer_backend/triton-launching-scripts/launch_triton.sh -d $DYNAMIC_ENABLED -pb $PREFER_BATCH_SIZE

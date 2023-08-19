@@ -146,7 +146,7 @@ TRITONBACKEND_ModelBatchInitialize(
   for(auto ite = request_pool->begin(); ite != request_pool->end(); ite++){
     auto& _queue = ite->second;
     if(!_queue.empty()){
-      for(int i = 0; i<_queue.size(); i++){
+      for(uint32_t i = 0; i<_queue.size(); i++){
         bool& boolean = _queue.at(i);
         if(!boolean){
           boolean = true;
@@ -220,6 +220,7 @@ TRITONBACKEND_ModelBatchIncludeRequest(
 
   TRITONBACKEND_Input* input;
   const char* property_name;
+  uint32_t buffer_count;
   int lora_type_int = -1;
 
   for (size_t count = 0; count < input_count; count++) {
@@ -233,26 +234,25 @@ TRITONBACKEND_ModelBatchIncludeRequest(
 
     // fetch the property name
     err = TRITONBACKEND_InputProperties(
-        input, &property_name, nullptr, nullptr, nullptr, nullptr, nullptr);
+        input, &property_name, nullptr, nullptr, nullptr, nullptr, &buffer_count);
     if (err)
       return err;
     
     if (strcmp(property_name, "lora_type") == 0){
-      *should_include = true;
-      
       const void* property_buffer;
       uint64_t property_buffer_size;
       TRITONSERVER_MemoryType property_memory_type;
       int64_t property_memory_type_id;
       err = TRITONBACKEND_InputBuffer(input, 0, &property_buffer, &property_buffer_size, 
                                       &property_memory_type, &property_memory_type_id);
-
-      const char* lora_type = reinterpret_cast<const char*>(property_buffer);
-      lora_type_int = std::atoi(lora_type);
-      LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("Lora Type: ") + std::string(lora_type)).c_str()
-      );
+      if(property_buffer_size>=sizeof(uint32_t)){
+        uint32_t data = *reinterpret_cast<const uint32_t*>(property_buffer);
+        lora_type_int = data;
+      }
+      // LOG_MESSAGE(
+      //   TRITONSERVER_LOG_INFO,
+      //   (std::string("Lora Type: ") + std::to_string(lora_type_int)).c_str()
+      // );
       break;
     } else 
       continue;
@@ -262,6 +262,15 @@ TRITONBACKEND_ModelBatchIncludeRequest(
   *should_include = judge_include(lora_type_int, *available_space) && *available_space;
   if(*should_include){
     *available_space -= 1;
+    LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      (std::string("included and available space:") + std::to_string(*available_space)).c_str()
+    );
+  }else{
+    LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("not included")).c_str()
+    );
   }
 
   return nullptr;  // success

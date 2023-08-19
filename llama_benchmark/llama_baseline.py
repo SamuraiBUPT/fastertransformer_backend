@@ -135,7 +135,7 @@ if __name__ == '__main__':
             incident = 5
             req_delay_pull_time = 28
             
-            preferred_batch_size = 25
+            preferred_batch_size = 5
             
             def send_async_infer(model_name, inputs, callback):
                 return client.async_infer(model_name=model_name,
@@ -268,7 +268,7 @@ if __name__ == '__main__':
             
             # request_sequence = trace.request_time_stamp # [4, 9, 8, 1, 2, ...]
             # max_request = [100, 150, 200, 250, 300, 350]
-            max_request = [240]
+            max_request = [100]
             
             waiting_on_collection = []
             waiting_off_collection = []

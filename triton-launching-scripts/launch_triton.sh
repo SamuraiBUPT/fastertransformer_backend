@@ -16,7 +16,7 @@ MODEL_NAME="llama"
 MAX_BATCH_SIZE=1024
 TENSOR_PARA=2
 ENABLE_DYNAMIC_BATCH="0"
-PREFER_BATCH_SIZE=25
+PREFER_BATCH_SIZE=5
 
 
 # recv parameters
@@ -60,6 +60,10 @@ dynamic_batching {
     preferred_batch_size: [ '"${PREFER_BATCH_SIZE}"' ]
     max_queue_delay_microseconds: '"${DELAY}"'
 }
+parameters: {
+  key: "TRITON_BATCH_STRATEGY_PATH", value: {string_value: "/be_workspace/dongyazhu/fastertransformer_backend/src/batching_strategies/build/install/batching/lora_batching/libtriton_lorabatching.so"}
+}
+parameters { key: "lora_request_batchsize" value: {string_value: "20"}}
     ' >> ./triton-model-store/${MODEL_NAME}/fastertransformer/config.pbtxt
 else
     echo "Dynamic batch disabled."
