@@ -203,6 +203,25 @@ std::string param_get(common::TritonJson::Value &param,
   return value;
 }
 
+std::vector<std::string> param_get_list(common::TritonJson::Value &param,
+                      const char*                field,
+                      const std::string         &fallback = "")
+{
+  std::vector<std::string> members = {};
+  std::vector<std::string> values = {};
+
+  common::TritonJson::Value key;
+
+  param.MemberAsObject(field, &key);
+  key.Members(&members);
+  for(const auto& e : members){
+    std::string tmp_value = fallback;
+    key.MemberAsString(e.c_str(), &tmp_value);
+    values.push_back(tmp_value);
+  }
+  return values;
+}
+
 int param_get_int(common::TritonJson::Value &param, const char* field, int fallback=0)
 {
   int ret = fallback;
@@ -250,6 +269,12 @@ std::shared_ptr<AbstractTransformerModel> ModelState::ModelFactory(
       param,
       "model_checkpoint_path",
       JoinPath({RepositoryPath(), std::to_string(Version()), model_filename}));
+
+  const std::vector<std::string> lora_dir = param_get_list(
+    param,
+    "lora_weights_path"
+  );
+
   const std::string model_type = param_get(param, "model_type", "GPT");
   const std::string data_type  = param_get(param, "data_type");
   const int         tp         = param_get_int(param, "tensor_para_size");
@@ -333,10 +358,10 @@ std::shared_ptr<AbstractTransformerModel> ModelState::ModelFactory(
     }
   } else if (model_type == "Llama") {
     if (data_type == "fp16") {
-      ft_model = std::make_shared<LlamaTritonModel<half>>(tp, pp, custom_ar, model_dir);
+      ft_model = std::make_shared<LlamaTritonModel<half>>(tp, pp, custom_ar, model_dir, lora_dir.at(0));
 #ifdef ENABLE_BF16
     } else if (data_type == "bf16") {
-      ft_model = std::make_shared<LlamaTritonModel<__nv_bfloat16>>(tp, pp, custom_ar, model_dir);
+      ft_model = std::make_shared<LlamaTritonModel<__nv_bfloat16>>(tp, pp, custom_ar, model_dir, lora_dir.at(0));
 #endif
     } else if (data_type == "fp32") {
       ft_model = std::make_shared<LlamaTritonModel<float>>(tp, pp, custom_ar, model_dir);
