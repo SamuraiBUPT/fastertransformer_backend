@@ -87,6 +87,8 @@ endif()
 #
 include(FetchContent)
 
+set(FT_TAG "feature/lora-support")
+
 FetchContent_Declare(
   repo-common
   GIT_REPOSITORY https://github.com/triton-inference-server/common.git
@@ -113,8 +115,8 @@ if (EXISTS ${FT_DIR})
 else()
   FetchContent_Declare(
     repo-ft
-    GIT_REPOSITORY https://github.com/SamuraiBUPT/FasterTransformer.git  
-    GIT_TAG main
+    GIT_REPOSITORY https://github.com/CharlesFang207/FasterTransformer.git  
+    GIT_TAG ${FT_TAG}
     GIT_SHALLOW ON
   )
 endif()
