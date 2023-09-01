@@ -16,7 +16,7 @@ MODEL_NAME="llama"
 MAX_BATCH_SIZE=1024
 TENSOR_PARA=2
 ENABLE_DYNAMIC_BATCH="0"
-PREFER_BATCH_SIZE=5
+PREFER_BATCH_SIZE=32
 
 
 # recv parameters
@@ -60,14 +60,17 @@ dynamic_batching {
     preferred_batch_size: [ '"${PREFER_BATCH_SIZE}"' ]
     max_queue_delay_microseconds: '"${DELAY}"'
 }
-parameters: {
-  key: "TRITON_BATCH_STRATEGY_PATH", value: {string_value: "/be_workspace/dongyazhu/fastertransformer_backend/src/batching_strategies/build/install/batching/lora_batching/libtriton_lorabatching.so"}
-}
-parameters { key: "lora_request_batchsize" value: {string_value: "20"}}
+
     ' >> ./triton-model-store/${MODEL_NAME}/fastertransformer/config.pbtxt
 else
     echo "Dynamic batch disabled."
 fi
+
+# put this into the dynamic batching zone
+# parameters: {
+#   key: "TRITON_BATCH_STRATEGY_PATH", value: {string_value: "/be_workspace/dongyazhu/fastertransformer_backend/src/batching_strategies/build/install/batching/lora_batching/libtriton_lorabatching.so"}
+# }
+# parameters { key: "lora_request_batchsize" value: {string_value: "20"}}
 
 echo '
 model_transaction_policy {
@@ -281,7 +284,7 @@ parameters {
 parameters {
   key: "model_checkpoint_path"
   value: {
-    string_value: "./models/'"${MODEL_NAME}"'/2-gpu"
+    string_value: "./models/'"${MODEL_NAME}"'/'"${TENSOR_PARA}"'-gpu"
   }
 }
 parameters {
@@ -606,4 +609,10 @@ ensemble_scheduling {
 
 
 
-/opt/tritonserver/bin/tritonserver --model-repository=./triton-model-store/${MODEL_NAME}/
+/opt/tritonserver/bin/tritonserver \
+--model-repository=./triton-model-store/${MODEL_NAME}/ \
+--trace-config triton,file=/be_workspace/dongyazhu/results/trace.json \
+    --trace-config triton,log-frequency=50 \
+    --trace-config rate=100 \
+    --trace-config level=TIMESTAMPS \
+    --trace-config count=100 

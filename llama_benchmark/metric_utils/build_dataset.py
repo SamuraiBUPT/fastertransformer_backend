@@ -95,15 +95,16 @@ class BuildDataset:
         # fetch the text randomly
         with open(text_directory + '/' + text_file_list[random_file_index], 'r', encoding='utf-8') as f:
             # read line index: random_num
-            data_index = np.arange(0, 10000, 1).tolist()
+            data_index = np.arange(0, 5000, 1).tolist()
 
             random.seed(self.rand_seed_num)
             sample_size = 400
             random_list = random.sample(data_index, sample_size)    # get 400 random text index
-            lines = f.readlines()
+            content = f.read()
+            paragraphs = content.split('\n')
             
             # pool: [['text_A'], ['text_b'], ... ]
-            rand_text_pool = [[lines[i]] for i in random_list]
+            rand_text_pool = [[paragraphs[i]] for i in random_list]
             self.random_text_pool = rand_text_pool    # get 400 random lines
             
         return rand_text_pool
