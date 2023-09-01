@@ -88,6 +88,9 @@ endif()
 include(FetchContent)
 
 set(FT_TAG "feature/lora-support")
+if(DEFINED ENV{SAMURAI_TOKEN})
+  set(GITHUB_TOKEN $ENV{SAMURAI_TOKEN})
+endif()
 
 FetchContent_Declare(
   repo-common
@@ -115,11 +118,15 @@ if (EXISTS ${FT_DIR})
 else()
   FetchContent_Declare(
     repo-ft
-    GIT_REPOSITORY https://github.com/CharlesFang207/FasterTransformer.git  
+    GIT_REPOSITORY https://$GITHUB_TOKEN@github.com/CharlesFang207/FasterTransformer.git
     GIT_TAG ${FT_TAG}
     GIT_SHALLOW ON
   )
 endif()
+
+# enable lora
+set(LORA_ENABLED ON CACHE BOOL "Enable LORA feature" FORCE)
+
 FetchContent_MakeAvailable(repo-common repo-core repo-backend repo-ft)
 
 #
