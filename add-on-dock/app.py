@@ -122,6 +122,8 @@ def get_output_text(output_raw):
 @app.route('/arrival', methods=['POST'])
 async def arrival():
     data = request.json
+    # print("===============INPUT=================")
+    # print(data['INPUT_0'])
     input_tensor = prepare_input_tensor(text_2d=[[data['INPUT_0']]], 
                                        protocal=data['protocal'], 
                                        lora_type=data['lora_type'],
@@ -136,7 +138,8 @@ async def arrival():
                                     input_tensor=input_tensor)[0]
         # output0_data = output0_data.as_numpy('OUTPUT0')
         output = get_output_text(output0_data)
-        print(output)
+        # print("===============OUTPUT=================")
+        # print(output)
                                        
 
 if __name__ == '__main__':

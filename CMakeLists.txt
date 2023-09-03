@@ -87,10 +87,12 @@ endif()
 #
 include(FetchContent)
 
-set(FT_TAG "feature/lora-support")
+set(FT_TAG "dev/cache")
 if(DEFINED ENV{SAMURAI_TOKEN})
-  set(GITHUB_TOKEN $ENV{SAMURAI_TOKEN})
+set(GITHUB_TOKEN $ENV{SAMURAI_TOKEN})
 endif()
+
+set(LORA_ENABLED ON FORCE)
 
 FetchContent_Declare(
   repo-common
@@ -125,7 +127,7 @@ else()
 endif()
 
 # enable lora
-set(LORA_ENABLED ON CACHE BOOL "Enable LORA feature" FORCE)
+set(SM 86 FORCE)
 
 FetchContent_MakeAvailable(repo-common repo-core repo-backend repo-ft)
 

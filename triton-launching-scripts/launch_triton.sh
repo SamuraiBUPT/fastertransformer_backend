@@ -14,9 +14,9 @@
 # default parameters
 MODEL_NAME="llama"
 MAX_BATCH_SIZE=1024
-TENSOR_PARA=2
+TENSOR_PARA=1
 ENABLE_DYNAMIC_BATCH="0"
-PREFER_BATCH_SIZE=32
+PREFER_BATCH_SIZE=20
 
 
 # recv parameters
@@ -285,6 +285,12 @@ parameters {
   key: "model_checkpoint_path"
   value: {
     string_value: "./models/'"${MODEL_NAME}"'/'"${TENSOR_PARA}"'-gpu"
+  }
+}
+parameters {
+  key: "lora_weights_path"
+  value: {
+    string_value: "./models/vicuna-'"${TENSOR_PARA}"'-gpu"
   }
 }
 parameters {
